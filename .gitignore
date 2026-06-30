@@ -1,7 +1,7 @@
 /target
 **/*.rs.bk
-Cargo.lock
 *.wasm
 .soroban/
+test_snapshots/
 .env
 .DS_Store
