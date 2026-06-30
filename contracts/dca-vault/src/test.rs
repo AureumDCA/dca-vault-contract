@@ -36,6 +36,24 @@ fn deposit_increases_balance() {
 }
 
 #[test]
+fn get_vault_with_no_schedule_returns_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, token_address) = setup(&env);
+    let client = DcaVaultContractClient::new(&env, &contract_id);
+
+    let owner = Address::generate(&env);
+    fund(&env, &token_address, &owner, 1_000);
+
+    client.deposit(&owner, &400);
+
+    let vault = client.get_vault(&owner);
+    assert_eq!(vault.owner, owner);
+    assert_eq!(vault.balance, 400);
+    assert_eq!(vault.schedule, None);
+}
+
+#[test]
 fn withdraw_decreases_balance() {
     let env = Env::default();
     env.mock_all_auths();
