@@ -99,3 +99,28 @@ the spec's function signatures don't pass a token address), `deposit`,
   test accounts.
 
 Committed and pushed to `dca-vault-contract`.
+
+### Session 2 — 2026-06-30
+
+Added GitHub Actions CI (`.github/workflows/ci.yml`): runs on push to `main`
+and on `pull_request`, runs `cargo test` (native target, correctness) then
+`cargo build --target wasm32v1-none --release` (deployability), with
+`Swatinem/rust-cache` for speed. Confirmed broken
+`wasm32-unknown-unknown` (see Session 1) is not used anywhere in the
+workflow.
+
+**Key decision — Rust 1.91.0, not 1.84.0.** The wasm32v1-none *target*
+exists from Rust 1.84+, but that's not the same as soroban-sdk 26.1.0's
+actual minimum supported Rust version. First CI attempt pinned 1.84.0 and
+failed: a transitive dependency (`enum-ordinalize-derive`) needs the
+`edition2024` Cargo feature, which requires Cargo 1.85+. Tried 1.85.0 next
+(locally, before pushing again) — still failed: `cargo +1.85.0 test` reported
+soroban-sdk 26.1.0 and several of its deps (`darling` 0.23, `enum-ordinalize`
+4.4.1, `serde_with` 3.21) declare rustc 1.88–1.91 as their minimum. Settled
+on 1.91.0, verified locally with both `cargo +1.91.0 test` and
+`cargo +1.91.0 build --target wasm32v1-none --release` before pushing again.
+CI run `28464308119`: completed/success.
+
+Lesson: "the target exists as of version X" and "the SDK's MSRV is X" are
+different facts — check the latter (e.g. by trying the pin locally with
+`cargo +<version>`) rather than assuming the former is sufficient.
