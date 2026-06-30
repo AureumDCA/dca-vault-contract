@@ -10,8 +10,9 @@ StellarDCA is split across three independent git repos, all under the
 `StellarDCA` GitHub org:
 
 - **dca-vault-contract** (this repo) — Trustless DCA vault on Stellar Soroban,
-  automated dollar-cost averaging with SDEX execution. Also holds this
-  cross-project context log.
+  automated dollar-cost averaging executed via contract-to-contract calls
+  into AMM/pool contracts (not SDEX — see Session 3, Soroban has no host
+  function for the classic SDEX). Also holds this cross-project context log.
 - **dca-vault-backend** — Schedule executor, price-history indexer, and
   portfolio API (Node/TypeScript).
 - **dca-vault-frontend** — Vault creation, dashboard, and portfolio UI
@@ -124,3 +125,87 @@ CI run `28464308119`: completed/success.
 Lesson: "the target exists as of version X" and "the SDK's MSRV is X" are
 different facts — check the latter (e.g. by trying the pin locally with
 `cargo +<version>`) rather than assuming the former is sufficient.
+
+### Session 3 — 2026-06-30
+
+**What was built**: scheduled swap execution. `Schedule` gained
+`pool_address: Address` and `min_amount_out_bps: u32`; `create_schedule` now
+takes both (set once per schedule, not changeable independently). Added a
+`SwapPool` trait (internal abstraction, not a `#[contractclient]`) and one
+implementation, `GenericPoolAdapter`, plus the permissionless
+`execute_swap(owner) -> i128` entrypoint: validates not-paused/due/balance,
+calls the adapter, updates `last_execution_ledger`/`next_execution_ledger`
+and balance, emits a `swap` event (`env.events().publish`, topics
+`(symbol_short!("swap"), owner)`, data `(amount_in, amount_out,
+pool_address)` — this is the shape `dca-vault-backend`'s indexer will read),
+and returns the amount received.
+
+**Why SDEX was dropped.** The original plan (see Session 1's README note)
+was "SDEX first, Swyft adapter later." That's not implementable: Soroban
+contracts have no host function for the classic Stellar SDEX at all — not a
+priority/ordering question, a hard capability gap confirmed via Stellar's own
+docs. Swaps must go through a contract-to-contract call into an AMM/pool
+contract instead, so the architecture is now "pool-adapter cross-contract
+calls" from the start, with `GenericPoolAdapter` as the first (only) adapter.
+
+**The interface assumption was wrong, too.** Before writing `GenericPoolAdapter`,
+cloned `stellar/soroban-examples` and actually read `liquidity_pool/src/lib.rs`
+rather than guessing. Its real `swap` signature is
+`swap(e, to: Address, buy_a: bool, out: i128, in_max: i128)` — a fixed
+two-token (A/B) pool, exact-*output* amounts, `to.require_auth()` required,
+no return value. That doesn't fit a vault that needs to swap into an
+arbitrary `target_asset` by exact *input* amount. So `GenericPoolAdapter`
+targets a different, simpler ABI we define ourselves: `swap(to, token_in,
+token_out, amount_in, min_amount_out) -> i128`. The example was still useful
+for the *patterns* (token::Client transfers, contract structure), just not
+its literal signature.
+
+**Avoiding deeper cross-contract auth.** A pool that pulls `token_in` from
+the caller via `transfer(&to, ..)` requiring `to.require_auth()` (the
+example's pattern) would need the vault to call
+`env.authorize_as_current_contract(..)` before invoking the pool, since
+Soroban only auto-authorizes a contract's *direct* calls, not calls two hops
+deep (vault → pool → token). To avoid that complexity, `GenericPoolAdapter`
+uses a push-then-call convention instead: the vault transfers `amount_in` of
+`token_in` to the pool itself first (a direct, self-authorizing call), then
+invokes `pool.swap(to = vault's own address, ...)`; the pool is expected to
+pay `token_out` back to `to` via its own direct, self-authorizing transfer.
+Every transfer in the flow is a contract moving its own already-held funds,
+so no deeper auth plumbing is needed. If the pool's `min_amount_out` check
+fails and it panics, the whole transaction — including the earlier push —
+reverts atomically, so funds can't get stuck mid-swap.
+
+**Slippage math kept naive on purpose**: `min_amount_out = amount_in *
+min_amount_out_bps / 10_000` assumes a naive 1:1 expected output, flagged
+with a TODO in `execute_swap` to replace with a real price/impact
+calculation (oracle or pool quote) later — explicitly out of scope for this
+pass per the spec.
+
+**Mock pool testing approach**: `execute_swap` can't be tested without
+something to swap against, so `test.rs` defines a `MockPool` contract
+(`#[cfg(test)]`-only, lives in the test module) implementing the
+`GenericPoolAdapter` target ABI with a fixed 1:1 rate, pre-funded with
+`target_asset` liquidity via `StellarAssetClient::mint`. Two non-obvious test
+fixes along the way: `env.events().all()` only returns events from the *last*
+invocation and must be captured immediately after `execute_swap`, before any
+other client call (e.g. a follow-up `get_vault`); and it returns *every*
+event from the call tree (including the underlying token `transfer` events
+from both legs of the swap), so the assertion uses
+`.filter_by_contract(&contract_id)` to isolate the vault's own `swap` event.
+
+7 new tests added (12 total): `execute_swap_succeeds_when_due` (balance,
+ledgers, and filtered event all asserted), `execute_swap_panics_when_not_due`,
+`execute_swap_panics_when_paused`, `execute_swap_panics_when_balance_insufficient`,
+and `execute_swap_is_callable_by_non_owner` (proves permissionless triggering
+by calling `env.set_auths(&[])` right before `execute_swap` — disables auth
+mocking entirely, so the call only succeeds because nothing in the path
+actually requires anyone's signature).
+
+`cargo test`: 12 passed, 0 failed. `cargo build --target wasm32v1-none
+--release`: succeeds (one pre-existing deprecation warning: `env.events().publish`
+is deprecated in favor of `#[contractevent]` in this soroban-sdk version;
+kept `publish` since the spec asked for it explicitly — worth revisiting
+later).
+
+README and this log updated to drop the SDEX-first framing and describe the
+pool-adapter architecture instead.
