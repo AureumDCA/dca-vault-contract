@@ -1,6 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::{vec as svec, Env, IntoVal};
+use soroban_sdk::{symbol_short, vec as svec, Env, IntoVal, Map, Symbol, Val};
 
 fn setup(env: &Env) -> (Address, Address) {
     let admin = Address::generate(env);
@@ -27,6 +27,12 @@ fn fund(env: &Env, token_address: &Address, to: &Address, amount: i128) {
 #[contract]
 struct MockPool;
 
+/// Mock pool that always panics in `swap` — used to verify that a pool
+/// failure causes the entire `execute_swap` transaction (including the
+/// pre-swap token push) to revert atomically, leaving no partial mutations.
+#[contract]
+struct MockPoolFailing;
+
 #[contractimpl]
 impl MockPool {
     pub fn swap(
@@ -47,6 +53,20 @@ impl MockPool {
             &amount_out,
         );
         amount_out
+    }
+}
+
+#[contractimpl]
+impl MockPoolFailing {
+    pub fn swap(
+        _env: Env,
+        _to: Address,
+        _token_in: Address,
+        _token_out: Address,
+        _amount_in: i128,
+        _min_amount_out: i128,
+    ) -> i128 {
+        panic!("simulated pool failure");
     }
 }
 
@@ -238,6 +258,16 @@ fn execute_swap_succeeds_when_due() {
     assert_eq!(schedule.last_execution_ledger, due_ledger);
     assert_eq!(schedule.next_execution_ledger, due_ledger + LEDGERS_PER_DAY);
 
+    // #[contractevent] emits topics as (static "swap", owner) and data as a
+    // Map with keys sorted alphabetically: amount_in, amount_out, pool_address.
+    let expected_data = Map::<Symbol, Val>::from_array(
+        &env,
+        [
+            (Symbol::new(&env, "amount_in"), 100i128.into_val(&env)),
+            (Symbol::new(&env, "amount_out"), 100i128.into_val(&env)),
+            (Symbol::new(&env, "pool_address"), pool_id.into_val(&env)),
+        ],
+    );
     assert_eq!(
         events,
         svec![
@@ -245,7 +275,7 @@ fn execute_swap_succeeds_when_due() {
             (
                 contract_id.clone(),
                 svec![&env, symbol_short!("swap").into_val(&env), owner.into_val(&env)],
-                (100i128, 100i128, pool_id).into_val(&env),
+                expected_data.into_val(&env),
             )
         ]
     );
@@ -345,4 +375,47 @@ fn execute_swap_is_callable_by_non_owner() {
     let amount_out = client.execute_swap(&owner);
     assert_eq!(amount_out, 100);
     assert_eq!(client.get_vault(&owner).balance, 400);
+}
+
+#[test]
+fn execute_swap_pool_failure_is_atomic() {
+    // Verify that the push-then-call pattern is truly atomic: when the pool
+    // panics mid-execution, the pre-swap token transfer (vault → pool) must
+    // revert along with everything else, leaving no partial state mutations.
+    // We check both the accounting layer (vault.balance) and the actual on-chain
+    // token balances — because the accounting decrement happens *after* the swap
+    // call returns, seeing vault.balance unchanged would prove nothing without
+    // also confirming the token push itself was rolled back.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, xlm, target_asset, _) = setup_swap(&env);
+    let fail_pool = env.register(MockPoolFailing, ());
+    let client = DcaVaultContractClient::new(&env, &contract_id);
+
+    let owner = Address::generate(&env);
+    fund(&env, &xlm, &owner, 1_000);
+    client.deposit(&owner, &500);
+    client.create_schedule(&owner, &Frequency::Daily, &100, &target_asset, &fail_pool, &9_000);
+
+    let schedule_before = client.get_vault(&owner).schedule.unwrap();
+    let due_ledger = schedule_before.next_execution_ledger;
+    make_due(&env, due_ledger);
+
+    // try_ variant catches the error without unwinding the test.
+    let result = client.try_execute_swap(&owner);
+    assert!(result.is_err());
+
+    // Real atomicity proof: the pre-swap token push (vault → fail_pool) must
+    // have reverted. The vault contract should still hold the full 500 XLM;
+    // the pool should have received nothing.
+    let xlm_client = token::TokenClient::new(&env, &xlm);
+    assert_eq!(xlm_client.balance(&contract_id), 500);
+    assert_eq!(xlm_client.balance(&fail_pool), 0);
+
+    // Accounting layer and schedule ledgers also unchanged.
+    let vault = client.get_vault(&owner);
+    assert_eq!(vault.balance, 500);
+    let schedule = vault.schedule.unwrap();
+    assert_eq!(schedule.last_execution_ledger, schedule_before.last_execution_ledger);
+    assert_eq!(schedule.next_execution_ledger, due_ledger);
 }

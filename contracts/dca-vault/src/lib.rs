@@ -1,6 +1,6 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, vec, Address, ConversionError,
+    contract, contractevent, contractimpl, contracttype, token, vec, Address, ConversionError,
     Env, EnvBase, IntoVal, MapObject, Symbol, TryFromVal, TryIntoVal, Val, Vec,
 };
 
@@ -87,6 +87,19 @@ impl TryFromVal<Env, &Vault> for Val {
 enum DataKey {
     Token,
     Vault(Address),
+}
+
+/// Emitted by [`DcaVaultContract::execute_swap`] on every successful swap.
+/// Topics: static `"swap"` + `owner` address (indexed for backend queries).
+/// Data: a Map with `amount_in`, `amount_out` (i128), and `pool_address`.
+#[contractevent(topics = ["swap"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SwapExecuted {
+    #[topic]
+    pub owner: Address,
+    pub amount_in: i128,
+    pub amount_out: i128,
+    pub pool_address: Address,
 }
 
 /// Internal abstraction over "a contract that can execute a swap for us".
@@ -302,10 +315,13 @@ impl DcaVaultContract {
             .persistent()
             .set(&DataKey::Vault(owner.clone()), &vault);
 
-        env.events().publish(
-            (symbol_short!("swap"), owner),
-            (amount_in, amount_out, pool_address),
-        );
+        SwapExecuted {
+            owner: owner.clone(),
+            amount_in,
+            amount_out,
+            pool_address,
+        }
+        .publish(&env);
 
         amount_out
     }
