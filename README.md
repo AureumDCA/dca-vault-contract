@@ -65,6 +65,17 @@ Rust 1.82+; use `wasm32v1-none` instead.
 
 ## Deployment
 
-Not yet deployed. Testnet deployment is pending review of the core vault and
-swap execution logic in this repo, and integration testing against a real
-deployed pool contract (tests so far run against an in-repo mock pool).
+### Testnet
+
+Deployed 2026-07-01.
+
+| | |
+| --- | --- |
+| **Contract ID** | `CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO` |
+| **Network** | Stellar Testnet |
+| **XLM token (SAC)** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| **Explorer** | [stellar.expert/explorer/testnet](https://stellar.expert/explorer/testnet/contract/CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO) |
+
+`initialize` was called at deployment with the XLM SAC address above. The
+contract is ready to accept `deposit` and `create_schedule` calls; swap
+execution requires a pool contract also deployed on testnet (pending).

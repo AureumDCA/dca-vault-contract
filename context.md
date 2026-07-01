@@ -22,6 +22,27 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 4 — 2026-07-01
+
+**Two tasks completed.**
+
+**Task 1 — migrate swap event to `#[contractevent]`**
+
+Replaced the deprecated `env.events().publish((symbol_short!("swap"), owner), (amount_in, amount_out, pool_address))` call with a typed `SwapExecuted` struct annotated with `#[contractevent(topics = ["swap"])]`. Topics unchanged: static `"swap"` + `owner` address (marked `#[topic]`). Data changes from a raw tuple/Vec to a Map — the macro's default `data_format`, which is better for tooling/SDKs. The macro sorts Map keys alphabetically before calling `map_new_from_slices`; for our fields `amount_in`, `amount_out`, `pool_address` the declaration order is already alphabetical so no reordering needed. Updated the event assertion in `execute_swap_succeeds_when_due` to construct an equivalent `Map::<Symbol, Val>::from_array(...)` for comparison. Removed `symbol_short` from lib.rs imports (only used in the old `.publish` call); added it directly to test.rs since `use super::*` no longer propagates it. CI confirmed green. Also added `execute_swap_pool_failure_is_atomic` test (confirmed in the previous session's final task): verifies that when MockPoolFailing panics mid-execution, the pre-swap token push and all state mutations revert atomically — checks both the accounting layer (`vault.balance`) and the actual token balances held by the vault and pool contracts.
+
+**Task 2 — Stellar Testnet deployment**
+
+Deployed to Stellar Testnet 2026-07-01 using the pre-existing `deployer` key (`GAODBHVR63Z56MVQRBEJSYM2H5423LJ4WAPUUBOFG4JYY72S6ROKVZRX`), which was already funded via friendbot.
+
+- **Contract ID**: `CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO`
+- **Network**: Stellar Testnet
+- **XLM SAC**: `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`
+- **Explorer**: https://stellar.expert/explorer/testnet/contract/CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO
+
+`initialize(token = XLM_SAC)` called immediately after deploy. Contract is live and ready for `deposit` / `create_schedule` / `execute_swap` calls. `execute_swap` requires a pool contract also deployed on testnet — no public pool yet targeting our `GenericPoolAdapter` ABI; that's the next integration step.
+
+Note: the `godamongstmen897` GitHub account owns the `StellarDCA` org — not `N-thnI` (the default active gh account). Switch with `gh auth switch -u godamongstmen897` before pushing to any `StellarDCA/*` repo.
+
 ### Session 1 — 2026-06-30
 
 **Repo/workspace setup**
