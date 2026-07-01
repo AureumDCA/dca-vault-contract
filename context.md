@@ -22,6 +22,65 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 6 — 2026-07-01
+
+**dca-vault-frontend scaffold (Next.js 16 / Tailwind / Freighter)**
+
+Initialized `dca-vault-frontend` using `create-next-app@latest` (TypeScript, Tailwind, ESLint, app router, no `src/` dir). Additional deps: `@stellar/freighter-api @stellar/stellar-sdk`.
+
+**`lib/freighter.ts`** — typed wrappers for Freighter v5 API (`isConnected`, `connect`, `getPublicKey`, `signTransaction`). Key v5 quirks: `getPublicKey` was removed — use `getAddress()` which returns `{ address }`. `isConnected()` returns `{ isConnected: boolean }`, not a bare boolean. `requestAccess()` returns `{ address }`. `signTransaction()` returns `{ signedTxXdr, signerAddress }`.
+
+**`lib/stellar.ts`** — fetch wrappers around the backend REST API (`getVault`, `getHistory`, `getPerformance`). `NEXT_PUBLIC_API_URL` env var, defaults to `http://localhost:3001`.
+
+**Components** (in `app/components/`):
+- `ConnectWallet.tsx` — calls `isConnected()` then `connect()`, props `{ onConnect: (pk: string) => void }`
+- `VaultStatus.tsx` — displays balance (stroops ÷ 1e7 → XLM), schedule details, paused badge. `formatFrequency()` handles `#[contracttype]` enum shape: `scValToNative` converts C-like enum to `["VariantName"]` (a single-element array), so check `Array.isArray(freq) ? freq[0] : freq`.
+- `CreateSchedule.tsx` — form with frequency select (Daily/Weekly/Monthly), amountPerExecution, targetAsset, poolAddress, minAmountOutBps. Props `{ onSubmit: (values) => Promise<void> }`.
+- `SwapHistory.tsx` — table of `SwapEvent[]` (ledger, amount_in, amount_out, tx_hash).
+
+**Pages**:
+- `app/page.tsx` — landing page; after Freighter connect, routes to `/vault?owner=<pk>`.
+- `app/vault/page.tsx` — `VaultDashboard` (uses `useSearchParams`, loads vault + history in parallel via `Promise.all`). Split into `VaultDashboard` + `VaultPage` wrapper because Next.js app router requires `useSearchParams()` inside a `Suspense` boundary — any component using it must be a leaf wrapped in `<Suspense>` by its parent.
+
+**Non-obvious fixes**:
+- `create-next-app` refuses any non-`.git` file in the target directory — moved `README.md` to `/tmp/` during init, restored after.
+- `vault !== null` guard (not `vault &&`) required because `vault: unknown` — the `&&` short-circuit returns `unknown` on the falsy path, which isn't `ReactNode`.
+- `.gitignore` had `.env*` catching `.env.local.example`; fixed with `!.env*.example` negation.
+
+**Env vars**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_NETWORK_PASSPHRASE`. `.env.local` filled with testnet values (gitignored); `.env.local.example` committed.
+
+**CI** (`.github/workflows/ci.yml`): `npm ci` → `npx tsc --noEmit` → `npm run build`. Uses `npx tsc` directly (not `npm run typecheck`) because Next.js sets `noEmit: true` in `tsconfig.json` and `npm run build` also runs tsc internally. CI run `28536253231`: completed/success in 35s.
+
+**Pending**: `CreateSchedule.onSubmit` in `vault/page.tsx` is a stub (`console.log + alert`) — Freighter signing + stellar-sdk transaction building for `create_schedule` not yet implemented.
+
+Three commits pushed: `chore: initialize dca-vault-frontend with Next.js and Tailwind`, `feat: scaffold vault UI components and Freighter integration`, `ci: add GitHub Actions workflow for typecheck and build`.
+
+---
+
+### Session 5 — 2026-07-01
+
+**dca-vault-backend scaffold (Node.js / Express / TypeScript)**
+
+Initialized `dca-vault-backend` with `package.json`, `tsconfig.json`, and deps: `express @stellar/stellar-sdk better-sqlite3 dotenv node-cron` (runtime) + `typescript ts-node @types/*` (dev). Scripts: `build` (`tsc`), `dev` (`ts-node src/index.ts`), `start` (`node dist/index.js`), `typecheck` (`tsc --noEmit`).
+
+**`src/config.ts`** — loads all env vars, throws on missing required ones, exports typed `Config`.
+
+**`src/indexer/db.ts`** — better-sqlite3 (synchronous, WAL mode). Tables: `swap_events` with `UNIQUE(tx_hash, owner)` for deduplication via `INSERT OR IGNORE`; `indexer_state` for cursor tracking. Exported `Db` interface: `insertSwapEvent`, `getSwapEvents`, `getAllOwners` (SELECT DISTINCT), `getLastLedger`, `setLastLedger`, `close`.
+
+**`src/indexer/poller.ts`** — polls Soroban RPC for SwapExecuted events. Topic filter: `xdr.ScVal.scvSymbol("swap").toXDR("base64")` = `AAAADwAAAARzd2Fw`. On first run (lastLedger=0), starts from `latestLedger - 100`. Parses events via `scValToNative`. Event data is a Map with keys `amount_in`, `amount_out`, `pool_address` (alphabetically sorted, as the `#[contractevent]` macro sorts Map keys before `map_new_from_slices`).
+
+**`src/executor/executor.ts`** — `getVaultState()` simulates `get_vault`; `executeSwap()` simulates → `rpc.assembleTransaction` → sign → `sendTransaction` → polls `getTransaction` up to 20× with 3s delay. Known limitation (TODO): executor only discovers owners via prior swap events; `create_schedule` events not yet indexed, so brand-new vaults aren't executed until after their first swap.
+
+**`src/api/`** — Express v5 router with handlers for: `GET /health`, `GET /vaults/:owner` (simulates `get_vault`, returns `scValToNative(retval)`), `GET /vaults/:owner/history` (SQLite), `GET /vaults/:owner/performance` (avg_price = total_invested / total_received). Express v5 types `req.params` values as `string | string[]`, requires `Array.isArray` guard per param.
+
+**stellar-sdk v15.1.0 API shape** (non-obvious): RPC client is `rpc.Server` (not `SorobanRpc`); `scValToNative` is top-level; `rpc.assembleTransaction`; `rpc.Api.isSimulationSuccess()` type guard; `rpc.Api.GetTransactionStatus` enum.
+
+**CI** (`.github/workflows/ci.yml`): `npm ci` → `npm run typecheck` → `npm run build`. Node 20, `actions/setup-node@v4` with `cache: 'npm'`. CI confirmed green.
+
+Two commits pushed: `feat: scaffold dca-vault-backend with executor, indexer, and API`, `ci: add GitHub Actions workflow for typecheck and build`.
+
+---
+
 ### Session 4 — 2026-07-01
 
 **Two tasks completed.**
