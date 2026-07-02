@@ -63,6 +63,12 @@ cargo build --target wasm32v1-none --release
 Note: `wasm32-unknown-unknown` is not supported by `soroban-sdk` 26.1.0 on
 Rust 1.82+; use `wasm32v1-none` instead.
 
+The test suite has **13 tests** covering deposit/withdraw accounting, schedule
+lifecycle (create / pause / resume), `get_vault` edge cases, all `execute_swap`
+guard paths (not-due, paused, insufficient balance), permissionless invocation,
+and atomicity (pool failure reverts the prior token push). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the full list.
+
 ## Deployment
 
 ### Testnet
@@ -79,3 +85,8 @@ Deployed 2026-07-01.
 `initialize` was called at deployment with the XLM SAC address above. The
 contract is ready to accept `deposit` and `create_schedule` calls; swap
 execution requires a pool contract also deployed on testnet (pending).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, branch naming,
+commit style, the PR checklist, and Drips Wave rules.

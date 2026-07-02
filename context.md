@@ -22,6 +22,30 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 7 — 2026-07-02
+
+**Documentation pass across all three StellarDCA repos.**
+
+For this repo:
+- Added `CONTRIBUTING.md`: prerequisites (Rust 1.91.0+, wasm32v1-none target, soroban-sdk 26.1.0), getting started commands, full list of 13 tests with one-line descriptions, branch naming conventions, Conventional Commits style guide, PR checklist, issue label glossary, note that complexity/points labels are maintainer-only, Drips Wave rules (don't resolve others' issues, don't inflate labels).
+- Updated `README.md`: added test suite summary (13 tests, what they cover), Contributing section linking to CONTRIBUTING.md.
+
+**Full contract feature state as of today:**
+
+*Functions*: `initialize`, `deposit`, `withdraw`, `create_schedule`, `pause_schedule`, `resume_schedule`, `get_vault`, `execute_swap`.
+
+*Tests (13)*: `deposit_increases_balance`, `get_vault_with_no_schedule_returns_none`, `withdraw_decreases_balance`, `withdraw_more_than_balance_panics`, `create_schedule_attaches_schedule`, `pause_and_resume_schedule_toggle_paused`, `get_vault_on_nonexistent_owner_panics`, `execute_swap_succeeds_when_due`, `execute_swap_panics_when_not_due`, `execute_swap_panics_when_paused`, `execute_swap_panics_when_balance_insufficient`, `execute_swap_is_callable_by_non_owner`, `execute_swap_pool_failure_is_atomic`.
+
+*Deployment*: Testnet, contract `CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO`, initialized 2026-07-01 with XLM SAC `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`.
+
+*Key technical decisions* (consolidated):
+- **wasm32v1-none**: soroban-sdk 26.1.0 rejects `wasm32-unknown-unknown` on Rust 1.82+; use `wasm32v1-none` (requires Rust 1.84+; effective MSRV of the full dep tree is 1.91.0).
+- **`Option<Schedule>` — hand-rolled TryFromVal**: soroban-sdk 26.1.0's `#[contracttype]` derive can't handle `Option<OtherContractTypeStruct>` fields under `cargo test` (testutils feature unification triggers an infallible Into<ScVal> requirement the nested struct can't satisfy). `Vault` is hand-implemented with `TryFromVal`/`Val` and requires Map keys in strict alphabetical order (`balance, owner, paused, schedule`).
+- **SDEX is not callable from Soroban**: no host function exists for it. Swap execution uses contract-to-contract calls via `GenericPoolAdapter` targeting `swap(to, token_in, token_out, amount_in, min_amount_out) -> i128`. Push-then-call pattern: vault pushes `token_in` to pool first (self-authorizing), then calls `pool.swap`; if pool panics, the push reverts atomically.
+- **`#[contractevent]`**: SwapExecuted uses the macro (Session 4). Map key sort is alphabetical; topics are `["swap"]` + owner address.
+
+---
+
 ### Session 6 — 2026-07-01
 
 **dca-vault-frontend scaffold (Next.js 16 / Tailwind / Freighter)**
