@@ -22,6 +22,31 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 8 — 2026-07-03
+
+**Day 2 — GitHub issue creation.** Opened the contract repo's backlog as
+tracked GitHub issues so the work is discoverable by Stellar Drips Wave
+contributors. Added the missing `Stellar Wave` label (blue, `#0075ca`) and
+created 4 issues, each with a Description / Tasks / Acceptance Criteria
+structure:
+
+- **#1** Implement Swyft concentrated liquidity adapter for `execute_swap`
+  (`enhancement`, `help wanted`) — second `SwapPool` trait impl alongside
+  `GenericPoolAdapter`, with a per-`Schedule` `adapter` enum selector.
+- **#2** Add price oracle integration for accurate `min_amount_out`
+  (`enhancement`, `help wanted`) — replaces the naive 1:1 slippage baseline
+  (the existing code TODO) with a real quote/oracle source.
+- **#3** Add vault creation event for executor discoverability
+  (`enhancement`, `good first issue`) — emit `ScheduleCreated` via
+  `#[contractevent]` so the backend can index brand-new vaults before their
+  first swap. Pairs with the backend indexer work.
+- **#4** Expand test coverage — edge cases and multi-execution scenarios
+  (`enhancement`, `good first issue`) — all three frequency variants,
+  sequential swaps, schedule replacement, token-level withdraw.
+
+Complexity/points labels are intentionally left off — the maintainer assigns
+those manually. No code changes this session.
+
 ### Session 7 — 2026-07-02
 
 **Documentation pass across all three StellarDCA repos.**
