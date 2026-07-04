@@ -1,6 +1,6 @@
 # Contributing to dca-vault-contract
 
-Welcome! This repo holds the Soroban smart contract at the core of StellarDCA — a trustless, permissionless DCA vault on Stellar. It's part of the **Stellar Drips Wave contributor program**, which rewards merged contributions with on-chain Drips payments. Every accepted PR earns you credit; maintainers assign complexity/points labels after review.
+Welcome! This repo holds the Soroban smart contract at the core of AureumDCA — a trustless, permissionless DCA vault on Stellar. It's part of the **Stellar Drips Wave contributor program**, which rewards merged contributions with on-chain Drips payments. Every accepted PR earns you credit; maintainers assign complexity/points labels after review.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Welcome! This repo holds the Soroban smart contract at the core of StellarDCA �
 ## Getting started
 
 ```sh
-git clone https://github.com/StellarDCA/dca-vault-contract.git
+git clone https://github.com/AureumDCA/dca-vault-contract.git
 cd dca-vault-contract
 cargo build --target wasm32v1-none --release
 cargo test

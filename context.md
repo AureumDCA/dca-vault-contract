@@ -1,13 +1,13 @@
-# StellarDCA — Project Context Log
+# AureumDCA — Project Context Log
 
 This file tracks every edit, decision, and development session across the
-StellarDCA project. Update it at the end of every working session — newest
+AureumDCA project. Update it at the end of every working session — newest
 entry on top. Sessions are numbered sequentially (Session 1, Session 2, ...).
 
 ## Project structure
 
-StellarDCA is split across three independent git repos, all under the
-`StellarDCA` GitHub org:
+AureumDCA is split across three independent git repos, all under the
+`AureumDCA` GitHub org:
 
 - **dca-vault-contract** (this repo) — Trustless DCA vault on Stellar Soroban,
   automated dollar-cost averaging executed via contract-to-contract calls
@@ -49,7 +49,7 @@ those manually. No code changes this session.
 
 ### Session 7 — 2026-07-02
 
-**Documentation pass across all three StellarDCA repos.**
+**Documentation pass across all three AureumDCA repos.**
 
 For this repo:
 - Added `CONTRIBUTING.md`: prerequisites (Rust 1.91.0+, wasm32v1-none target, soroban-sdk 26.1.0), getting started commands, full list of 13 tests with one-line descriptions, branch naming conventions, Conventional Commits style guide, PR checklist, issue label glossary, note that complexity/points labels are maintainer-only, Drips Wave rules (don't resolve others' issues, don't inflate labels).
@@ -149,7 +149,7 @@ Deployed to Stellar Testnet 2026-07-01 using the pre-existing `deployer` key (`G
 
 `initialize(token = XLM_SAC)` called immediately after deploy. Contract is live and ready for `deposit` / `create_schedule` / `execute_swap` calls. `execute_swap` requires a pool contract also deployed on testnet — no public pool yet targeting our `GenericPoolAdapter` ABI; that's the next integration step.
 
-Note: the `godamongstmen897` GitHub account owns the `StellarDCA` org — not `N-thnI` (the default active gh account). Switch with `gh auth switch -u godamongstmen897` before pushing to any `StellarDCA/*` repo.
+Note: the `godamongstmen897` GitHub account owns the `AureumDCA` org — not `N-thnI` (the default active gh account). Switch with `gh auth switch -u godamongstmen897` before pushing to any `AureumDCA/*` repo.
 
 ### Session 1 — 2026-06-30
 
@@ -158,8 +158,8 @@ Note: the `godamongstmen897` GitHub account owns the `StellarDCA` org — not `N
 - Discovered the workspace already contained three initialized repos
   (`dca-vault-backend`, `dca-vault-contract`, `dca-vault-frontend`), each with
   a single `chore: initialize workspace` commit and a README stub, already
-  pushed to `github.com/StellarDCA/*`.
-- Initially set up a fourth root-level repo (`StellarDCA/StellarDCA`) to hold
+  pushed to `github.com/AureumDCA/*`.
+- Initially set up a fourth root-level repo (`AureumDCA/AureumDCA`) to hold
   a context log, plus a `.gitignore` and VS Code settings at the root.
   Reconsidered: removed that root repo entirely (no 4th repo). Moved
   `context.md` into `dca-vault-contract` instead, and added a `.gitignore` to
