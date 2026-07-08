@@ -28,13 +28,14 @@ cargo test
 cargo test
 ```
 
-The suite has **13 tests** covering:
+The suite has **14 tests** covering:
 
 - `deposit_increases_balance` — deposit correctly credits the vault balance
 - `get_vault_with_no_schedule_returns_none` — vault with no schedule has `schedule: None`
 - `withdraw_decreases_balance` — withdraw correctly debits the vault balance
 - `withdraw_more_than_balance_panics` — over-withdrawal panics
 - `create_schedule_attaches_schedule` — schedule fields are persisted correctly
+- `create_schedule_emits_schedule_created_event` — `schedule_created` event is emitted with the correct topic and fields
 - `pause_and_resume_schedule_toggle_paused` — pause/resume toggles the `paused` flag
 - `get_vault_on_nonexistent_owner_panics` — reading a missing vault panics
 - `execute_swap_succeeds_when_due` — a due, unpaused swap executes, balance and ledgers update, `swap` event emitted
@@ -82,7 +83,7 @@ One logical change per commit. Keep subjects under 72 characters.
 
 Before requesting review, confirm:
 
-- [ ] `cargo test` passes — all 13 (or more) tests green
+- [ ] `cargo test` passes — all 14 (or more) tests green
 - [ ] `cargo build --target wasm32v1-none --release` succeeds with no new warnings
 - [ ] `context.md` updated with a brief note about what changed and why
 - [ ] Branch name follows the naming conventions above

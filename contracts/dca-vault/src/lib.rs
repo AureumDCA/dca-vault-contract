@@ -102,6 +102,24 @@ pub struct SwapExecuted {
     pub pool_address: Address,
 }
 
+/// Emitted by [`DcaVaultContract::create_schedule`] whenever a schedule is
+/// attached to a vault (including replacing an existing one). Lets the
+/// backend indexer discover a vault the moment it's scheduled, instead of
+/// waiting for its first `SwapExecuted` event.
+/// Topics: static `"schedule_created"` + `owner` address.
+/// Data: a Map with `frequency`, `amount_per_execution` (i128),
+/// `target_asset`, and `pool_address`.
+#[contractevent(topics = ["schedule_created"])]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScheduleCreated {
+    #[topic]
+    pub owner: Address,
+    pub frequency: Frequency,
+    pub amount_per_execution: i128,
+    pub target_asset: Address,
+    pub pool_address: Address,
+}
+
 /// Internal abstraction over "a contract that can execute a swap for us".
 /// Soroban contracts have no host function for the classic Stellar SDEX (no
 /// XDR opcode/host call reaches it), so scheduled swaps must go through a
@@ -236,13 +254,24 @@ impl DcaVaultContract {
         vault.schedule = Some(Schedule {
             frequency,
             amount_per_execution,
-            target_asset,
+            target_asset: target_asset.clone(),
             last_execution_ledger: current_ledger,
             next_execution_ledger: current_ledger + Self::ledgers_for(frequency),
-            pool_address,
+            pool_address: pool_address.clone(),
             min_amount_out_bps,
         });
-        env.storage().persistent().set(&DataKey::Vault(owner), &vault);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Vault(owner.clone()), &vault);
+
+        ScheduleCreated {
+            owner,
+            frequency,
+            amount_per_execution,
+            target_asset,
+            pool_address,
+        }
+        .publish(&env);
     }
 
     pub fn pause_schedule(env: Env, owner: Address) {

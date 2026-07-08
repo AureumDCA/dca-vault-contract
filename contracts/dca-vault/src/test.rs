@@ -186,6 +186,59 @@ fn create_schedule_attaches_schedule() {
 }
 
 #[test]
+fn create_schedule_emits_schedule_created_event() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, _token_address) = setup(&env);
+    let client = DcaVaultContractClient::new(&env, &contract_id);
+
+    let owner = Address::generate(&env);
+    let target_asset = Address::generate(&env);
+    let pool_address = Address::generate(&env);
+
+    client.create_schedule(
+        &owner,
+        &Frequency::Weekly,
+        &50,
+        &target_asset,
+        &pool_address,
+        &9_500,
+    );
+
+    // events().all() only returns events from the *last* contract invocation,
+    // so it must be captured immediately after create_schedule.
+    let events = env.events().all().filter_by_contract(&contract_id);
+
+    // #[contractevent] emits topics as (static "schedule_created", owner) and
+    // data as a Map with keys sorted alphabetically: amount_per_execution,
+    // frequency, pool_address, target_asset.
+    let expected_data = Map::<Symbol, Val>::from_array(
+        &env,
+        [
+            (Symbol::new(&env, "amount_per_execution"), 50i128.into_val(&env)),
+            (Symbol::new(&env, "frequency"), Frequency::Weekly.into_val(&env)),
+            (Symbol::new(&env, "pool_address"), pool_address.into_val(&env)),
+            (Symbol::new(&env, "target_asset"), target_asset.into_val(&env)),
+        ],
+    );
+    assert_eq!(
+        events,
+        svec![
+            &env,
+            (
+                contract_id.clone(),
+                svec![
+                    &env,
+                    Symbol::new(&env, "schedule_created").into_val(&env),
+                    owner.into_val(&env)
+                ],
+                expected_data.into_val(&env),
+            )
+        ]
+    );
+}
+
+#[test]
 fn pause_and_resume_schedule_toggle_paused() {
     let env = Env::default();
     env.mock_all_auths();

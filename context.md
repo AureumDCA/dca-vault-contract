@@ -22,6 +22,36 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 9 — 2026-07-08
+
+**Closed issue #3: `ScheduleCreated` event for executor discoverability.**
+
+Added a `ScheduleCreated` event, emitted at the end of `create_schedule`, so
+the backend indexer can discover a vault the moment it's scheduled instead of
+waiting for its first `SwapExecuted` event. Follows the exact same
+`#[contractevent]` pattern as `SwapExecuted` (Session 4):
+
+- `#[contractevent(topics = ["schedule_created"])]` struct `ScheduleCreated`
+  with `#[topic] owner: Address` plus `frequency`, `amount_per_execution`,
+  `target_asset`, `pool_address` — matching the field set the backend's
+  `dca-vault-backend` poller (already merged, blocked on this event existing)
+  expects. The `"schedule_created"` topic string is 16 chars, too long for
+  `symbol_short!`, so the test builds it with `Symbol::new(&env, ...)` instead
+  — same as the contract macro does internally.
+- `create_schedule` now clones `owner`, `target_asset`, and `pool_address`
+  before moving the originals into the `Schedule` struct / storage key, so the
+  same values can be reused to construct and `.publish()` the event afterward.
+- New test `create_schedule_emits_schedule_created_event`, modeled on
+  `execute_swap_succeeds_when_due`'s event-assertion pattern: captures
+  `env.events().all().filter_by_contract(&contract_id)` right after the call,
+  and asserts against a `Map<Symbol, Val>` with keys in alphabetical order
+  (`amount_per_execution, frequency, pool_address, target_asset`).
+
+`cargo test`: 14 passed, 0 failed (13 previous + this one). `cargo build
+--target wasm32v1-none --release`: succeeds, zero warnings. README and
+CONTRIBUTING.md updated (test count 13 → 14, new test listed, `create_schedule`
+function-table row now mentions the event).
+
 ### Session 8 — 2026-07-03
 
 **Day 2 — GitHub issue creation.** Opened the contract repo's backlog as

@@ -31,7 +31,7 @@ due/paused/balance checks gate execution, not caller identity.
 | `initialize(token)` | One-time setup: records the token contract (XLM's Stellar Asset Contract) that deposits/withdrawals move. |
 | `deposit(owner, amount)` | Owner-authorized. Transfers `amount` XLM from `owner` into the vault, increasing its balance. |
 | `withdraw(owner, amount)` | Owner-authorized. Decreases the vault balance and transfers `amount` XLM back to `owner`. Panics if `amount` exceeds the balance. |
-| `create_schedule(owner, frequency, amount_per_execution, target_asset, pool_address, min_amount_out_bps)` | Owner-authorized. Creates or replaces the owner's recurring swap schedule. |
+| `create_schedule(owner, frequency, amount_per_execution, target_asset, pool_address, min_amount_out_bps)` | Owner-authorized. Creates or replaces the owner's recurring swap schedule and emits a `schedule_created` event, so a backend indexer can discover the vault immediately rather than waiting for its first swap. |
 | `pause_schedule(owner)` | Owner-authorized. Halts scheduled execution without clearing the schedule. |
 | `resume_schedule(owner)` | Owner-authorized. Re-enables a paused schedule. |
 | `get_vault(owner)` | Read-only. Returns the owner's `Vault`, or panics if none exists. |
@@ -63,11 +63,11 @@ cargo build --target wasm32v1-none --release
 Note: `wasm32-unknown-unknown` is not supported by `soroban-sdk` 26.1.0 on
 Rust 1.82+; use `wasm32v1-none` instead.
 
-The test suite has **13 tests** covering deposit/withdraw accounting, schedule
-lifecycle (create / pause / resume), `get_vault` edge cases, all `execute_swap`
-guard paths (not-due, paused, insufficient balance), permissionless invocation,
-and atomicity (pool failure reverts the prior token push). See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the full list.
+The test suite has **14 tests** covering deposit/withdraw accounting, schedule
+lifecycle (create / pause / resume), the `schedule_created` event, `get_vault`
+edge cases, all `execute_swap` guard paths (not-due, paused, insufficient
+balance), permissionless invocation, and atomicity (pool failure reverts the
+prior token push). See [CONTRIBUTING.md](CONTRIBUTING.md) for the full list.
 
 ## Deployment
 
