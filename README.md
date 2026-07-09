@@ -1,5 +1,8 @@
 # DCA Vault Contract
 
+[![CI](https://github.com/AureumDCA/dca-vault-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/AureumDCA/dca-vault-contract/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Soroban smart contract on Stellar implementing a trustless Dollar-Cost
 Averaging (DCA) vault: users deposit XLM into a personal on-chain vault,
 configure a recurring swap schedule, and anyone can permissionlessly trigger

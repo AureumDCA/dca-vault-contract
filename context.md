@@ -22,6 +22,17 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 10 — 2026-07-09
+
+**README: CI/License badges.** Added `CI` and `License: MIT` shields.io
+badges directly under the H1 title, linking to the repo's `ci.yml` workflow
+and the MIT license text. The "Deployment" section already had an
+**Explorer** table row linking to the same Stellar Expert testnet contract
+page requested for today's task, so it was left as-is rather than adding a
+redundant second link — additive-only, no rewording/restructuring of existing
+sections. `cargo test` (14/14) and `cargo build --target wasm32v1-none
+--release` both still pass clean after the README-only change.
+
 ### Session 9 — 2026-07-08
 
 **Closed issue #3: `ScheduleCreated` event for executor discoverability.**
