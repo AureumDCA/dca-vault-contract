@@ -22,6 +22,27 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 11 — 2026-07-12
+
+**CI: bump GitHub Actions to latest stable.** Checked each action's real
+releases via `gh api repos/<owner>/<repo>/releases` (not guessed) before
+touching anything:
+
+- **`actions/checkout`**: `v4` → `v7`. Confirmed `v7.0.0` is a genuine stable
+  release (published 2026-06-18, not a prerelease/draft) via the GitHub API.
+- **`dtolnay/rust-toolchain`**: left as `@master` — unchanged. This action
+  doesn't use semver release tags at all (only one legacy `v1` tag exists,
+  and its branches like `1.91.0` are Rust toolchain versions, not action
+  versions); `@master` is the action's own documented, maintainer-recommended
+  usage, not a stale pin.
+- **`Swatinem/rust-cache`**: left as `@v2` — unchanged. Latest release is
+  `v2.9.1`; no `v3` tag exists (checked both releases and raw tags), so `@v2`
+  is already the current major.
+
+`cargo test`: 14 passed, 0 failed. `cargo build --target wasm32v1-none
+--release`: succeeds, zero warnings. (Neither exercises the workflow YAML
+itself — that's confirmed by the actual CI run after push.)
+
 ### Session 10 — 2026-07-09
 
 **README: CI/License badges.** Added `CI` and `License: MIT` shields.io
