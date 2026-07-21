@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "contracts/dca-vault",
+  "contracts/demo-pool",
 ]
 
 [workspace.dependencies]

@@ -22,6 +22,59 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 12 — 2026-07-21
+
+**Deploy a real demo AMM pool to testnet, for genuine end-to-end
+`execute_swap` verification (Day 1 of 2 — no swap attempted yet).**
+
+Added `contracts/demo-pool` as a new workspace member: a minimal pool
+contract implementing the exact ABI `GenericPoolAdapter` calls —
+`swap(to, token_in, token_out, amount_in, min_amount_out) -> i128` at a
+fixed 1:1 rate, following the same push-then-call convention already
+exercised by `MockPool` in `dca-vault`'s own tests (the caller pushes
+`token_in` to the pool before calling `swap`; the pool only pays out
+`token_out`). Honest scope note is in the file's top doc comment: this is
+explicitly *not* a production AMM, just a real, callable testnet
+counterparty so `execute_swap` can be verified end-to-end instead of only
+against `#[cfg(test)]` mocks. Also has `deposit_liquidity` (admin/funder-
+authorized top-up) and a read-only `get_balance` — implemented as a live
+`token::TokenClient::balance()` read of the pool's own address rather than
+a separately tracked storage counter, so it can never drift from the real
+on-chain balance. 5 new tests (deposit increases balance, swap succeeds at
+1:1 and transfers correctly, slippage panic, insufficient-liquidity panic,
+balance accuracy across deposits+swaps) — all pass. `cargo test` across the
+whole workspace: 19 passed (14 dca-vault + 5 demo-pool), 0 failed. `cargo
+build --target wasm32v1-none --release -p demo-pool`: succeeds, zero
+warnings.
+
+**Testnet deployment (all via `stellar` CLI 26.0.0, syntax checked against
+`--help` first, not guessed):**
+
+- **TESTUSD test asset**: new issuer keypair `testusd-issuer`
+  (`GANTM4FGB37EAQYTJC34DSLVCYQAYDL7XSY2HVX3GKAHESCHZTGNDD2Z`), funded via
+  friendbot, SAC deployed via `stellar contract asset deploy --asset
+  "TESTUSD:<issuer>" --source-account testusd-issuer --network testnet` →
+  `CCZJ4RREF7QFBYSDQQFFMZ4WAB3QEPULS2TQUA7IRYYX2HFUHZKOR24W`.
+- **demo-pool contract**: deployed with the existing `deployer` identity →
+  `CDZY4VCY2HWX43GT3EAMATC3JZTEASFS7LU73XVMNZFXF7UGU42ZV6AC`. Initialized
+  with `admin = deployer`, `token_a = XLM SAC`
+  (`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`), `token_b =
+  TESTUSD SAC`.
+- **Minting TESTUSD**: minting to `deployer` first failed with `HostError:
+  Error(Contract, #13)` ("trustline entry is missing for account") — classic
+  Stellar assets require an explicit trustline even when moved through a
+  SAC. Fixed by calling the SAC's `trust --addr <deployer>` (signed by
+  deployer) before minting; minted 1,000,000 TESTUSD (`10000000000000`
+  stroops) to deployer from `testusd-issuer`.
+- **Liquidity funded**: `deposit_liquidity` called twice from `deployer` —
+  500 XLM (`5000000000` stroops) and 500 TESTUSD (`5000000000` stroops).
+  Verified via `get_balance` on each token: both return `5000000000`,
+  confirming the deposits actually landed in the pool's own balance.
+
+Not done today (explicitly deferred to Day 2 per the task): no
+`execute_swap` call against the real vault yet — today only proves the pool
+itself is deployed, correctly wired, and funded.
+
 ### Session 11 — 2026-07-12
 
 **CI: bump GitHub Actions to latest stable.** Checked each action's real

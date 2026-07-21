@@ -87,7 +87,29 @@ Deployed 2026-07-01.
 
 `initialize` was called at deployment with the XLM SAC address above. The
 contract is ready to accept `deposit` and `create_schedule` calls; swap
-execution requires a pool contract also deployed on testnet (pending).
+execution requires a pool contract also deployed on testnet — see the demo
+pool below.
+
+## Demo Pool (Testnet)
+
+To let `execute_swap` be verified against a real, callable pool instead of
+only the `#[cfg(test)]` `MockPool`, a minimal demo AMM pool
+(`contracts/demo-pool`) is deployed on Stellar Testnet. **This is a
+testnet-only demo counterparty for end-to-end verification — a
+deliberately simple, fixed 1:1-rate pool, not a production AMM
+integration.** See the doc comment at the top of
+`contracts/demo-pool/src/lib.rs` for the full scope note.
+
+| | |
+| --- | --- |
+| **Contract ID** | `CDZY4VCY2HWX43GT3EAMATC3JZTEASFS7LU73XVMNZFXF7UGU42ZV6AC` |
+| **Network** | Stellar Testnet |
+| **token_a** | XLM SAC — `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| **token_b** | TESTUSD SAC — `CCZJ4RREF7QFBYSDQQFFMZ4WAB3QEPULS2TQUA7IRYYX2HFUHZKOR24W` |
+| **TESTUSD issuer** | `GANTM4FGB37EAQYTJC34DSLVCYQAYDL7XSY2HVX3GKAHESCHZTGNDD2Z` |
+| **Explorer** | [stellar.expert/explorer/testnet](https://stellar.expert/explorer/testnet/contract/CDZY4VCY2HWX43GT3EAMATC3JZTEASFS7LU73XVMNZFXF7UGU42ZV6AC) |
+
+Funded with 500 XLM and 500 TESTUSD of liquidity, verified via `get_balance`.
 
 ## Contributing
 
