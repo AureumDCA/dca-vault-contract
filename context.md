@@ -22,6 +22,59 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 13 — 2026-07-23
+
+**Milestone: first genuine end-to-end DCA cycle completed on testnet
+(Day 2 of 2) — real `execute_swap`, called permissionlessly.**
+
+The `Daily` schedule created in Session 12 (`next_execution_ledger:
+3756043`) became due. Checked the current ledger via `stellar ledger latest
+--network testnet` → `3757604`, already past due by 1,561 ledgers. Confirmed
+the demo pool held sufficient TESTUSD liquidity (`get_balance` → `5000000000`
+stroops = 500 TESTUSD, well above the 50 TESTUSD needed for this swap), then
+called `execute_swap`.
+
+**Called deliberately from `deployer`, not `vault-owner`** — proving
+`execute_swap`'s permissionless design genuinely holds on live testnet, not
+just in unit tests: any funded account can trigger a due, unpaused
+schedule's swap; the schedule's own state gates execution, not caller
+identity.
+
+**Transaction hash: `b4b43afd24e080b2cba7e5492ac4d096f9787a8aab4ea01b62849b0451b7c556`**
+(https://stellar.expert/explorer/testnet/tx/b4b43afd24e080b2cba7e5492ac4d096f9787a8aab4ea01b62849b0451b7c556)
+
+Real events emitted: XLM `transfer` (vault → pool, 500000000 stroops),
+TESTUSD `transfer` (pool → vault, 500000000 stroops), and the contract's own
+`SwapExecuted` event — `amount_in: 500000000`, `amount_out: 500000000`
+(1:1 demo rate), `pool_address` matching the demo pool.
+
+**Vault state, before → after** (confirmed via `get_vault`'s raw XDR dump —
+same known CLI pretty-print limitation on `Vault`'s hand-rolled type as
+every prior session, not a new issue):
+
+| Field | Before | After |
+| --- | --- | --- |
+| `balance` | `2000000000` | `1500000000` (−500000000, exactly `amount_per_execution`) |
+| `last_execution_ledger` | `3738763` | `3757613` (the execution ledger) |
+| `next_execution_ledger` | `3756043` | `3774893` (`3757613 + 17280` — one `LEDGERS_PER_DAY` ahead, correct) |
+
+**Verified against the live backend**, `GET /vaults/GD6KZDL3Q...`, which
+independently confirms `"balance":"1500000000"` and the updated schedule —
+this also confirms the BigInt-serialization and CORS fixes shipped to
+`dca-vault-backend` this week are genuinely live in production, since the
+call succeeded cross-origin-style with correctly-typed JSON. `GET
+/vaults/.../history` returned `[]` at the time of checking — the swap event
+had not yet been picked up by the backend's poller (could be ordinary
+30s-interval timing lag, or could relate to the unrelated pre-existing
+`XdrReaderError: unknown SorobanCredentialsType member for value 2` seen in
+the poller's local logs in an earlier session — not confirmed either way,
+reported as observed rather than assumed).
+
+This closes the loop opened in Session 12: `deposit` → `create_schedule` →
+(real-world wait for the schedule to become due) → `execute_swap`, entirely
+on live Stellar Testnet, with every step backed by a real, verifiable
+transaction hash rather than a unit test mock.
+
 ### Session 12 — 2026-07-21
 
 **Deploy a real demo AMM pool to testnet, for genuine end-to-end
