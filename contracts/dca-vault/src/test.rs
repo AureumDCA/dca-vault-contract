@@ -54,6 +54,10 @@ impl MockPool {
         );
         amount_out
     }
+
+    pub fn get_balance(env: Env, token: Address) -> i128 {
+        token::TokenClient::new(&env, &token).balance(&env.current_contract_address())
+    }
 }
 
 #[contractimpl]
@@ -67,6 +71,10 @@ impl MockPoolFailing {
         _min_amount_out: i128,
     ) -> i128 {
         panic!("simulated pool failure");
+    }
+
+    pub fn get_balance(env: Env, token: Address) -> i128 {
+        token::TokenClient::new(&env, &token).balance(&env.current_contract_address())
     }
 }
 
@@ -82,6 +90,10 @@ fn setup_swap(env: &Env) -> (Address, Address, Address, Address) {
     let pool_id = env.register(MockPool, ());
     let target_token_admin = token::StellarAssetClient::new(env, &target_asset);
     target_token_admin.mint(&pool_id, &1_000_000);
+    // Equal token_in reserve so the reserve-ratio quote is 1:1, preserving
+    // this fixture's existing tests' expected amounts unchanged.
+    let xlm_admin = token::StellarAssetClient::new(env, &xlm);
+    xlm_admin.mint(&pool_id, &1_000_000);
 
     (contract_id, xlm, target_asset, pool_id)
 }
@@ -443,6 +455,11 @@ fn execute_swap_pool_failure_is_atomic() {
     env.mock_all_auths();
     let (contract_id, xlm, target_asset, _) = setup_swap(&env);
     let fail_pool = env.register(MockPoolFailing, ());
+    // Fund fail_pool's reserves so get_expected_output's quote succeeds and
+    // the transaction genuinely fails inside swap() itself (the thing this
+    // test is verifying), not earlier at the quote step.
+    token::StellarAssetClient::new(&env, &xlm).mint(&fail_pool, &1_000_000);
+    token::StellarAssetClient::new(&env, &target_asset).mint(&fail_pool, &1_000_000);
     let client = DcaVaultContractClient::new(&env, &contract_id);
 
     let owner = Address::generate(&env);
@@ -460,10 +477,11 @@ fn execute_swap_pool_failure_is_atomic() {
 
     // Real atomicity proof: the pre-swap token push (vault → fail_pool) must
     // have reverted. The vault contract should still hold the full 500 XLM;
-    // the pool should have received nothing.
+    // fail_pool should still hold only its pre-funded reserve (1_000_000),
+    // not that plus the 500 that would have been pushed.
     let xlm_client = token::TokenClient::new(&env, &xlm);
     assert_eq!(xlm_client.balance(&contract_id), 500);
-    assert_eq!(xlm_client.balance(&fail_pool), 0);
+    assert_eq!(xlm_client.balance(&fail_pool), 1_000_000);
 
     // Accounting layer and schedule ledgers also unchanged.
     let vault = client.get_vault(&owner);
@@ -471,4 +489,81 @@ fn execute_swap_pool_failure_is_atomic() {
     let schedule = vault.schedule.unwrap();
     assert_eq!(schedule.last_execution_ledger, schedule_before.last_execution_ledger);
     assert_eq!(schedule.next_execution_ledger, due_ledger);
+}
+
+#[test]
+fn get_expected_output_is_proportional_to_unequal_reserves() {
+    // Proves the quote is a real reserve-ratio calculation, not the old
+    // naive 1:1 assumption: with a 1000:500 token_in:token_out reserve
+    // ratio, 100 units in should quote to 50 out, not 100.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_contract_id, xlm) = setup(&env);
+
+    let target_admin = Address::generate(&env);
+    let target_sac = env.register_stellar_asset_contract_v2(target_admin);
+    let target_asset = target_sac.address();
+
+    let pool_id = env.register(MockPool, ());
+    token::StellarAssetClient::new(&env, &xlm).mint(&pool_id, &1_000);
+    token::StellarAssetClient::new(&env, &target_asset).mint(&pool_id, &500);
+
+    let expected_out =
+        GenericPoolAdapter::get_expected_output(&env, &pool_id, &xlm, &target_asset, 100);
+    assert_eq!(expected_out, 50);
+}
+
+#[test]
+#[should_panic(expected = "pool has no liquidity for token_in")]
+fn get_expected_output_panics_when_balance_in_is_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_contract_id, xlm) = setup(&env);
+
+    let target_admin = Address::generate(&env);
+    let target_sac = env.register_stellar_asset_contract_v2(target_admin);
+    let target_asset = target_sac.address();
+
+    // pool_id is registered but never funded with any xlm (token_in).
+    let pool_id = env.register(MockPool, ());
+    token::StellarAssetClient::new(&env, &target_asset).mint(&pool_id, &500);
+
+    GenericPoolAdapter::get_expected_output(&env, &pool_id, &xlm, &target_asset, 100);
+}
+
+#[test]
+#[should_panic(expected = "slippage: amount_out below min_amount_out")]
+fn execute_swap_panics_on_slippage_from_reserve_based_quote() {
+    // With naive 1:1 pricing this scenario would NOT have panicked (a flat
+    // 90 min_amount_out is <= the mock's fixed 100 payout). Only because
+    // the pool's reserves value token_out at 2x token_in does the
+    // reserve-based quote produce a stricter min_amount_out (180) than the
+    // mock's fixed 1:1 payout (100) can satisfy — proving execute_swap is
+    // now genuinely using the reserve ratio, not a hardcoded assumption.
+    let env = Env::default();
+    env.mock_all_auths();
+    let (contract_id, xlm) = setup(&env);
+    let client = DcaVaultContractClient::new(&env, &contract_id);
+
+    let target_admin = Address::generate(&env);
+    let target_sac = env.register_stellar_asset_contract_v2(target_admin);
+    let target_asset = target_sac.address();
+
+    let pool_id = env.register(MockPool, ());
+    token::StellarAssetClient::new(&env, &xlm).mint(&pool_id, &500);
+    token::StellarAssetClient::new(&env, &target_asset).mint(&pool_id, &1_000);
+
+    let owner = Address::generate(&env);
+    fund(&env, &xlm, &owner, 1_000);
+    client.deposit(&owner, &500);
+    client.create_schedule(&owner, &Frequency::Daily, &100, &target_asset, &pool_id, &9_000);
+
+    let due_ledger = client
+        .get_vault(&owner)
+        .schedule
+        .unwrap()
+        .next_execution_ledger;
+    make_due(&env, due_ledger);
+
+    client.execute_swap(&owner);
 }

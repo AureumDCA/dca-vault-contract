@@ -135,6 +135,17 @@ pub trait SwapPool {
         amount_in: i128,
         min_amount_out: i128,
     ) -> i128;
+
+    /// Returns a price quote for `amount_in` of `token_in`, expressed in
+    /// `token_out`. See `GenericPoolAdapter`'s implementation doc comment
+    /// for exactly what this quote is (and isn't).
+    fn get_expected_output(
+        env: &Env,
+        pool_address: &Address,
+        token_in: &Address,
+        token_out: &Address,
+        amount_in: i128,
+    ) -> i128;
 }
 
 /// Calls into a pool contract expected to expose:
@@ -181,6 +192,44 @@ impl SwapPool for GenericPoolAdapter {
             min_amount_out.into_val(env),
         ];
         env.invoke_contract::<i128>(pool_address, &Symbol::new(env, "swap"), args)
+    }
+
+    /// Reserve-ratio price quote: cross-contract calls the pool's own
+    /// `get_balance` for both `token_in` and `token_out` (the demo pool
+    /// already exposes this), reading its CURRENT balances at call time —
+    /// in the same transaction as the swap itself, so the quote reflects
+    /// real-time state rather than a stale cached price. It then computes
+    /// `amount_in * balance_out / balance_in`, the standard constant-
+    /// product-style proportional quote.
+    ///
+    /// Honest scope note: this is NOT a true price oracle. It has no
+    /// historical smoothing, and it is only as manipulation-resistant as
+    /// the pool's own reserves are — a thinly-liquid pool can still be
+    /// moved within the same transaction. For a demo/testnet pool this is
+    /// a meaningful improvement over a hardcoded 1:1 assumption, and the
+    /// same pattern extends naturally to a real AMM's own quote function
+    /// once one is integrated (e.g. Swyft).
+    fn get_expected_output(
+        env: &Env,
+        pool_address: &Address,
+        token_in: &Address,
+        token_out: &Address,
+        amount_in: i128,
+    ) -> i128 {
+        let balance_in = env.invoke_contract::<i128>(
+            pool_address,
+            &Symbol::new(env, "get_balance"),
+            vec![env, token_in.into_val(env)],
+        );
+        let balance_out = env.invoke_contract::<i128>(
+            pool_address,
+            &Symbol::new(env, "get_balance"),
+            vec![env, token_out.into_val(env)],
+        );
+        if balance_in == 0 {
+            panic!("pool has no liquidity for token_in; cannot compute a price quote");
+        }
+        amount_in.saturating_mul(balance_out) / balance_in
     }
 }
 
@@ -322,10 +371,14 @@ impl DcaVaultContract {
         let pool_address = schedule.pool_address.clone();
         let amount_in = schedule.amount_per_execution;
 
-        // TODO: replace this naive 1:1 expected-output assumption with a
-        // real price/impact calculation (e.g. via an oracle or the pool's
-        // own quote function) once one is available.
-        let min_amount_out = amount_in.saturating_mul(schedule.min_amount_out_bps as i128) / 10_000;
+        let expected_out = GenericPoolAdapter::get_expected_output(
+            &env,
+            &pool_address,
+            &token_in,
+            &token_out,
+            amount_in,
+        );
+        let min_amount_out = expected_out.saturating_mul(schedule.min_amount_out_bps as i128) / 10_000;
 
         let amount_out = GenericPoolAdapter::swap(
             &env,

@@ -76,14 +76,17 @@ prior token push). See [CONTRIBUTING.md](CONTRIBUTING.md) for the full list.
 
 ### Testnet
 
-Deployed 2026-07-01.
+Redeployed 2026-08-03 (reserve-based price quote in `execute_swap`; see
+context.md for the full history, including the prior contract ID
+`CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO`, deployed
+2026-07-01, now orphaned but still viewable on Stellar Expert).
 
 | | |
 | --- | --- |
-| **Contract ID** | `CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO` |
+| **Contract ID** | `CDUJQQ742DH36VLLUQ4PGIQFVIV6OU4EX7HYK5STV5VUUQJIFK7BLQYC` |
 | **Network** | Stellar Testnet |
 | **XLM token (SAC)** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Explorer** | [stellar.expert/explorer/testnet](https://stellar.expert/explorer/testnet/contract/CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO) |
+| **Explorer** | [stellar.expert/explorer/testnet](https://stellar.expert/explorer/testnet/contract/CDUJQQ742DH36VLLUQ4PGIQFVIV6OU4EX7HYK5STV5VUUQJIFK7BLQYC) |
 
 `initialize` was called at deployment with the XLM SAC address above. The
 contract is ready to accept `deposit` and `create_schedule` calls; swap

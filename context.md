@@ -22,6 +22,70 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 14 — 2026-08-03
+
+**Closed issue #2: replaced the naive 1:1 `min_amount_out` assumption with a
+real reserve-based price quote.**
+
+`execute_swap` previously computed `min_amount_out` as a flat percentage of
+`amount_in` itself — correct only by coincidence when `token_in` and
+`token_out` happen to be worth the same. Fixed by adding a real quote step:
+
+- **`SwapPool` trait**: added `get_expected_output(env, pool_address,
+  token_in, token_out, amount_in) -> i128`.
+- **`GenericPoolAdapter::get_expected_output`**: cross-contract calls the
+  pool's own `get_balance` for both `token_in` and `token_out` (the demo
+  pool already exposes this), then computes
+  `amount_in * balance_out / balance_in` — a standard constant-product-style
+  proportional quote, read in the same transaction as the swap itself (so it
+  reflects real-time reserves, not a stale cached price). Panics clearly
+  (`"pool has no liquidity for token_in..."`) if `balance_in` is 0, rather
+  than dividing by zero silently.
+- **Honest scope note** (in the doc comment): this is a reserve-ratio quote,
+  not a true price oracle — no historical smoothing, and only as
+  manipulation-resistant as the pool's own reserves are. For a demo/testnet
+  pool this is a meaningful improvement over a hardcoded 1:1 assumption; the
+  same pattern extends naturally to a real AMM's own quote function once one
+  is integrated (e.g. Swyft).
+- **`execute_swap`**: now calls `get_expected_output` before computing
+  `min_amount_out`, replacing the flat 1:1 assumption. No other part of the
+  execution flow changed.
+
+**Tests**: `MockPool`/`MockPoolFailing` gained a `get_balance` (mirroring
+demo-pool's), and `setup_swap`'s pool fixture now also holds an equal
+token_in reserve (so existing tests' expected amounts are unchanged — a 1:1
+reserve ratio quotes identically to the old naive assumption). Added three
+new tests: `get_expected_output_is_proportional_to_unequal_reserves` (a
+1000:500 reserve ratio quotes 100 in as 50 out, not 100 — proving this isn't
+1:1 anymore), `get_expected_output_panics_when_balance_in_is_zero`, and
+`execute_swap_panics_on_slippage_from_reserve_based_quote` (reserves valuing
+token_out at 2x token_in produce a stricter `min_amount_out` than the mock's
+fixed 1:1 payout can satisfy — a scenario that would NOT have panicked under
+the old naive calculation). `cargo test`: 17 dca-vault tests + 5 demo-pool
+tests, all passing. `cargo build --target wasm32v1-none --release`: zero
+warnings.
+
+**Redeployed to testnet** (this changes `execute_swap`'s logic, so a new
+WASM was required):
+- **New contract ID**: `CDUJQQ742DH36VLLUQ4PGIQFVIV6OU4EX7HYK5STV5VUUQJIFK7BLQYC`
+- Initialized with the same XLM SAC as before:
+  `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`
+- Propagated the new ID across all three repos' README/CONTRIBUTING/.env
+  files (left historical session-log entries in this file's Session 4/13
+  untouched — those correctly describe what was true at the time).
+
+**Accepted tradeoff — the old vault is now orphaned.** The prior contract
+(`CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO`, deployed
+Session 4, 2026-07-01) held the real deposit, schedule, and executed swap
+from Sessions 12–13 — that vault and its transaction history remain valid
+and permanently viewable on Stellar Expert, but the new contract starts with
+zero vaults. This is expected and accepted, not a regression: any contract
+logic change requires a redeploy, and Soroban contracts aren't upgradable
+in place without an explicit upgrade mechanism (which this contract doesn't
+have). A fresh end-to-end cycle (deposit → create_schedule → execute_swap)
+would need to be re-run against the new contract ID to get a new real
+on-chain history under it.
+
 ### Session 13 — 2026-07-23
 
 **Milestone: first genuine end-to-end DCA cycle completed on testnet
