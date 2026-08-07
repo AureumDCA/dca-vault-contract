@@ -22,6 +22,54 @@ Each repo is committed and pushed independently, one repo at a time.
 
 ## Session log
 
+### Session 15 — 2026-08-07
+
+**Milestone: first autonomous `execute_swap` — the backend executor fired
+without human involvement. Also established that it had never fired before.**
+
+Full write-up of the executor/poller side lives in dca-vault-backend's
+`context.md` Session 8. Recorded here because it completes the contract's
+core product claim and produced new on-chain history against the current
+deployment.
+
+**Cycle run against `CDUJQQ742DH36VLLUQ4PGIQFVIV6OU4EX7HYK5STV5VUUQJIFK7BLQYC`:**
+
+| Step | Tx |
+| --- | --- |
+| `deposit` (100 XLM) | `89b9305608b17f0b6d546214f3ab9cc44bed58701870f490718c12c49f62688a` |
+| `create_schedule` (Daily, 10 XLM/execution, bps 9500) | `47ef36b9a2dc03cebc30b2e27ffbc38b4796ab2dde984e83922a26484bb99ddf` |
+| `execute_swap` — **fired autonomously by the backend executor** | `1635abc061c324c660a72d7e1aecda88d0d6bc41dfdb37be260f6db058b2bb03` |
+
+State transitions verified: balance `1000000000 → 900000000`,
+`last_execution_ledger → 4015648`, `next_execution_ledger → 4032928`
+(+`LEDGERS_PER_DAY`). Signed by the executor account
+`GCNMZYNV3NVFLK25K3KLZ2LM6HAAD4BVYHULQX746XERD6HQRGGJ6SLD`.
+
+This also exercised the reserve-based quote from Session 14 in production for
+the first time. Pool reserves at execution were 550 XLM / 450 TESTUSD, so the
+quote was `amount_in × 0.818`; at 9500 bps that put `min_amount_out` at
+~77.7% of `amount_in`, comfortably under the demo pool's fixed 1:1 payout, so
+the swap cleared.
+
+**Honest limits, recorded deliberately:**
+
+- **Punctual firing is not proven.** The executor process died ~4h into the
+  24h wait (poller cursor froze at ledger `3985523`), so nothing was alive
+  when the schedule came due at `3999952`. It sat overdue ~21 hours, then
+  executed within one tick of restart. The decision logic and execution path
+  are proven; firing *at* the due moment is not.
+- **Permissionless execution and autonomous execution are on different
+  deployments.** The permissionless demonstration (a third party triggering
+  another account's schedule, tx
+  `b4b43afd24e080b2cba7e5492ac4d096f9787a8aab4ea01b62849b0451b7c556`) is on
+  the previous contract `CDJF7V5NLGKAV7RHTBCR3LMHC7MUS7IWL6KYSLO6ZWEEJYJGWUVGEDEO`,
+  orphaned by the Session 14 redeploy. Both transactions are real and
+  permanently viewable; neither contract carries both proofs.
+- **A hosting-level gap was surfaced**, filed as dca-vault-backend#4: the
+  indexer's SQLite state does not survive restarts on ephemeral hosting, which
+  would silently blind the executor to all pre-existing vaults on the deployed
+  free tier. The run here only succeeded because local disk persisted.
+
 ### Session 14 — 2026-08-03
 
 **Closed issue #2: replaced the naive 1:1 `min_amount_out` assumption with a
